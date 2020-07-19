@@ -2,10 +2,7 @@
 #include <Arduino.h>
 #include "secrets.h"
 
-// Please enter your sensitive data in the Secret tab or arduino_secrets.h
-// PIN Number
 const char PINNUMBER[]     = SECRET_PINNUMBER;
-// APN data
 const char GPRS_APN[]      = SECRET_GPRS_APN;
 const char GPRS_LOGIN[]    = SECRET_GPRS_LOGIN;
 const char GPRS_PASSWORD[] = SECRET_GPRS_PASSWORD;
@@ -20,35 +17,44 @@ char server[] = "httpbin.org";
 char path[] = "/anything";
 int port = 443; // port 443 is the default for HTTPS
 
-void setup() {
-    // initialize serial communications and wait for port to open:
-    Serial.begin(9600);
-    while (!Serial) {
-        ; // wait for serial port to connect. Needed for native USB port only
-    }
+void initLed() {
+    pinMode(LED_BUILTIN, OUTPUT);
+}
 
-    Serial.println("Starting Arduino web client.");
-    // connection state
+void blinkLed(int ms) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(ms);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(ms);
+}
+
+void blinkLed(int count, int ms) {
+    for (int i=0; i<count; i++) {
+        blinkLed(ms);
+    }
+}
+
+void setup() {
+    initLed();
+    blinkLed(1, 2000);
+
     bool connected = false;
 
-    // After starting the modem with GSM.begin()
-    // attach the shield to the GPRS network with the APN, login and password
     while (!connected) {
+        blinkLed(2, 250);
         if ((gsmAccess.begin(PINNUMBER) == GSM_READY) &&
             (gprs.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD) == GPRS_READY)) {
             connected = true;
         } else {
-            Serial.println("Not connected");
             delay(1000);
         }
     }
 
-    Serial.println("connecting...");
+    blinkLed(1, 1000);
 
     // if you get a connection, report back via serial:
     if (client.connect(server, port)) {
-        Serial.println("connected");
-        // Make a HTTP request:
+        blinkLed(1, 1000);
         client.print("GET ");
         client.print(path);
         client.println(" HTTP/1.1");
@@ -56,9 +62,9 @@ void setup() {
         client.println(server);
         client.println("Connection: close");
         client.println();
+        blinkLed(1, 1000);
     } else {
-        // if you didn't get a connection to the server:
-        Serial.println("connection failed");
+        blinkLed(4, 250);
     }
 }
 
@@ -66,15 +72,13 @@ void loop() {
     // if there are incoming bytes available
     // from the server, read them and print them:
     if (client.available()) {
-        char c = client.read();
-        Serial.print(c);
+        client.read();
     }
 
     // if the server's disconnected, stop the client:
     if (!client.available() && !client.connected()) {
-        Serial.println();
-        Serial.println("disconnecting.");
         client.stop();
+        blinkLed(10, 100);
 
         // do nothing forevermore:
         for (;;)

@@ -2,20 +2,18 @@
 #include <Arduino.h>
 #include "secrets.h"
 
-const char PINNUMBER[]     = SECRET_PINNUMBER;
-const char GPRS_APN[]      = SECRET_GPRS_APN;
-const char GPRS_LOGIN[]    = SECRET_GPRS_LOGIN;
+const char PINNUMBER[] = SECRET_PINNUMBER;
+const char GPRS_APN[] = SECRET_GPRS_APN;
+const char GPRS_LOGIN[] = SECRET_GPRS_LOGIN;
 const char GPRS_PASSWORD[] = SECRET_GPRS_PASSWORD;
 
-// initialize the library instance
-GSMSSLClient client;
+GSMClient client;
 GPRS gprs;
-GSM gsmAccess;
+GSM gsmAccess(false);
 
-// URL, path and port (for example: arduino.cc)
-char server[] = "httpbin.org";
-char path[] = "/anything";
-int port = 443; // port 443 is the default for HTTPS
+char server[] = "hw1.kilsundvaeret.no";
+char path[] = "/api/v1/data-log-request";
+int port = 80;
 
 void initLed() {
     pinMode(LED_BUILTIN, OUTPUT);
@@ -29,42 +27,62 @@ void blinkLed(int ms) {
 }
 
 void blinkLed(int count, int ms) {
-    for (int i=0; i<count; i++) {
+    for (int i = 0; i < count; i++) {
         blinkLed(ms);
     }
 }
 
 void setup() {
+    Serial.begin(9600);
+    while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
+    }
     initLed();
     blinkLed(1, 2000);
 
-    bool connected = false;
 
-    while (!connected) {
-        blinkLed(2, 250);
-        if ((gsmAccess.begin(PINNUMBER) == GSM_READY) &&
-            (gprs.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD) == GPRS_READY)) {
-            connected = true;
-        } else {
-            delay(1000);
-        }
-    }
+    blinkLed(2, 250);
+    Serial.println("Connecting...");
+    GSM3_NetworkStatus_t networkStatus = gsmAccess.begin(PINNUMBER);
+    Serial.print("Networkstatus: ");
+    Serial.println(networkStatus == GSM_READY);
 
-    blinkLed(1, 1000);
+    GSM3_NetworkStatus_t gprsStatus = gprs.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD);
+    Serial.print("GPRS Status: ");
+    Serial.println(gprsStatus == GPRS_READY);
+    Serial.println("Connected...");
+    blinkLed(2, 250);
 
-    // if you get a connection, report back via serial:
-    if (client.connect(server, port)) {
+    int connected = client.connect(server, port);
+    if (connected) {
+        char request[400];
+        char payload[] = R"({"loggerId": "bua", "sensorName": "vann-temp", "value": 14.2 })";
+
+        strcpy(request, "POST ");
+        strcat(request, path);
+        strcat(request, " HTTP/1.1\n");
+        strcat(request, "Host: ");
+        strcat(request, server);
+        strcat(request, "\n");
+        strcat(request, "Connection: close\n");
+        strcat(request, "Content-Type: application/json\n");
+        strcat(request, "Content-Length: ");
+        char contentLength[5];
+        itoa(strlen(payload),contentLength,10);
+        strcat(request, contentLength);
+        strcat(request, "\n\n");
+        strcat(request, payload);
+        strcat(request, "\n");
+
+        Serial.println(request);
+
         blinkLed(1, 1000);
-        client.print("GET ");
-        client.print(path);
-        client.println(" HTTP/1.1");
-        client.print("Host: ");
-        client.println(server);
-        client.println("Connection: close");
-        client.println();
+        client.println(request);
         blinkLed(1, 1000);
+
+        Serial.println("Data sent");
     } else {
         blinkLed(4, 250);
+        blinkLed(1, 3000);
     }
 }
 
@@ -81,7 +99,6 @@ void loop() {
         blinkLed(10, 100);
 
         // do nothing forevermore:
-        for (;;)
-            ;
+        for (;;);
     }
 }

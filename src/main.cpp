@@ -1,3 +1,4 @@
+#include <DHT.h>
 #include <MKRGSM.h>
 #include <Arduino.h>
 #include "secrets.h"
@@ -10,6 +11,8 @@ const char GPRS_PASSWORD[] = SECRET_GPRS_PASSWORD;
 GSMClient client;
 GPRS gprs;
 GSM gsmAccess(false);
+
+DHT dht(1, DHT22);
 
 char server[] = "hw1.kilsundvaeret.no";
 char path[] = "/api/v1/data-log-request";
@@ -33,12 +36,16 @@ void blinkLed(int count, int ms) {
 }
 
 void setup() {
-    Serial.begin(9600);
-    while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
-    }
+    //Serial.begin(9600);
+    //while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
+    //}
+    dht.begin();
     initLed();
     blinkLed(1, 2000);
 
+    float t = dht.readTemperature();
+    Serial.print("Temp: ");
+    Serial.println(t);
 
     blinkLed(2, 250);
     Serial.println("Connecting...");
@@ -55,7 +62,8 @@ void setup() {
     int connected = client.connect(server, port);
     if (connected) {
         char request[400];
-        char payload[] = R"({"loggerId": "bua", "sensorName": "vann-temp", "value": 14.2 })";
+        char payload[400];
+        sprintf(payload, R"({"loggerId": "bua", "sensorName": "inne-temp", "value": %f })", t);
 
         strcpy(request, "POST ");
         strcat(request, path);
@@ -99,6 +107,8 @@ void loop() {
         blinkLed(10, 100);
 
         // do nothing forevermore:
-        for (;;);
+        while(true) {
+            delayMicroseconds(100);
+        }
     }
 }

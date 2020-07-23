@@ -47,17 +47,17 @@ void setup() {
     Serial.print("Temp: ");
     Serial.println(t);
 
-    blinkLed(2, 250);
-    Serial.println("Connecting...");
-    GSM3_NetworkStatus_t networkStatus = gsmAccess.begin(PINNUMBER);
-    Serial.print("Networkstatus: ");
-    Serial.println(networkStatus == GSM_READY);
+    gsmAccess.begin(PINNUMBER, true, false);
+    while (!gsmAccess.ready()) {
+        blinkLed(1, 100);
+    }
 
-    GSM3_NetworkStatus_t gprsStatus = gprs.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD);
-    Serial.print("GPRS Status: ");
-    Serial.println(gprsStatus == GPRS_READY);
-    Serial.println("Connected...");
-    blinkLed(2, 250);
+    gprs.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD, false);
+    while (!gprs.ready()) {
+        blinkLed(1, 100);
+    }
+
+    blinkLed(1, 2000);
 
     int connected = client.connect(server, port);
     if (connected) {

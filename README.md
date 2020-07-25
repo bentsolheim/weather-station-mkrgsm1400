@@ -10,4 +10,7 @@ Create file src/secrets.h with contents
     #define SECRET_GPRS_LOGIN ""
     #define SECRET_GPRS_PASSWORD ""
     
+    #define SECRET_HOSTNAME "datalogger.hostname.com"
+    #define SECRET_PORT 80
+    
 to build.

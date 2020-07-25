@@ -25,7 +25,7 @@ DHT dht(1, DHT22);
 LedMgr statusLed(LED_BUILTIN);
 LedMgr errorLed(7);
 GsmHelper gsmHelper(&gsmAccess, &gprs, &statusLed, PINNUMBER, GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD);
-GsmHttpClient httpClient(&client, "hw1.kilsundvaeret.no", 80);
+GsmHttpClient httpClient(&client, SECRET_HOSTNAME, SECRET_PORT);
 
 int iteration = 0;
 int errors = 0;
@@ -74,7 +74,7 @@ void loop() {
 
     statusLed.on();
     createSenorPayload(payload);
-    success = httpClient.post("/api/v1/data-log-request", payload, response);
+    success = httpClient.post("/api/v1/logger/bua/readings", payload, response);
     if (success) {
         Serial.println(response);
     } else {
@@ -94,7 +94,7 @@ void loop() {
     statusLed.blink(2, 100);
     statusLed.off();
 
-    delay(10000);
+    delay(5*60*1000);
 }
 
 
@@ -104,15 +104,13 @@ void createSenorPayload(char *payload) {
     float h = dht.readHumidity();
 
     sprintf(payload, R"({
-  "data": [
+  "readings": [
     {
-      "loggerId": "bua",
       "sensorName": "inne-temp",
       "value": %f,
       "localTime": %lu
     },
     {
-      "loggerId": "bua",
       "sensorName": "inne-humidity",
       "value": %f,
       "localTime": %lu

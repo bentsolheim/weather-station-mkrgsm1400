@@ -5,10 +5,15 @@
 #include "GsmHttpClient.cpp"
 #include "LedMgr.h"
 
+bool waitForDebug = false;
+
 const char PINNUMBER[] = SECRET_PINNUMBER;
 const char GPRS_APN[] = SECRET_GPRS_APN;
 const char GPRS_LOGIN[] = SECRET_GPRS_LOGIN;
 const char GPRS_PASSWORD[] = SECRET_GPRS_PASSWORD;
+
+void createSenorPayload(char *payload);
+void createLoggerPayload(char *payload, long timeSpent);
 
 GSMClient client;
 GPRS gprs;
@@ -18,40 +23,45 @@ GSMScanner gsmScanner;
 DHT dht(1, DHT22);
 
 LedMgr statusLed(LED_BUILTIN);
+LedMgr errorLed(7);
 GsmHelper gsmHelper(&gsmAccess, &gprs, &statusLed, PINNUMBER, GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD);
 GsmHttpClient httpClient(&client, "hw1.kilsundvaeret.no", 80);
-
-void setup() {
-    Serial.begin(9600);
-    while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
-    }
-    dht.begin();
-    statusLed.blink(1, 2000);
-}
 
 int iteration = 0;
 int errors = 0;
 
-void createSenorPayload(char *payload);
-void createLoggerPayload(char *payload, long timeSpent);
+void setup() {
+    if (waitForDebug) {
+        Serial.begin(9600);
+        while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
+        }
+    }
+    dht.begin();
+    statusLed.on();
+    errorLed.on();
+    delay(1000);
+    statusLed.off();
+    errorLed.off();
+    delay(1000);
+}
 
 void loop() {
     iteration++;
     Serial.print("Iteration ");
     Serial.println(iteration);
-    statusLed.blink(3, 333);
+    statusLed.blink(1, 100);
 
     Serial.println("Connecting...");
     long timeSpent = gsmHelper.connect(60000);
     if (timeSpent == -1) {
+        errorLed.on();
         errors++;
-        Serial.println("Error while connecting. Taking a break...");
         delay(60000);
-        Serial.println("Resetting modem");
         gsmScanner.begin();
-        Serial.println("Modem reset");
         return;
     }
+
+    errorLed.off();
 
     Serial.print("Connected in ");
     Serial.print(timeSpent);
@@ -62,12 +72,13 @@ void loop() {
     char response[400];
     int success;
 
+    statusLed.on();
     createSenorPayload(payload);
     success = httpClient.post("/api/v1/data-log-request", payload, response);
     if (success) {
         Serial.println(response);
     } else {
-        statusLed.blink(3, 1000);
+        errorLed.blink(2, 500);
     }
 
     createLoggerPayload(payload, timeSpent);
@@ -75,12 +86,13 @@ void loop() {
     if (success) {
         Serial.println(response);
     } else {
-        statusLed.blink(3, 1000);
+        errorLed.blink(4, 250);
     }
 
     gsmHelper.disconnect();
 
-    statusLed.blink(3, 333);
+    statusLed.blink(2, 100);
+    statusLed.off();
 
     delay(10000);
 }

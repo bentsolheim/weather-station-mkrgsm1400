@@ -2,6 +2,8 @@
 #include <MKRGSM.h>
 #include <Arduino.h>
 #include "secrets.h"
+#include "GsmHttpClient.cpp"
+#include "LedMgr.h"
 
 const char PINNUMBER[] = SECRET_PINNUMBER;
 const char GPRS_APN[] = SECRET_GPRS_APN;
@@ -11,104 +13,110 @@ const char GPRS_PASSWORD[] = SECRET_GPRS_PASSWORD;
 GSMClient client;
 GPRS gprs;
 GSM gsmAccess(false);
+GSMScanner gsmScanner;
 
 DHT dht(1, DHT22);
 
-char server[] = "hw1.kilsundvaeret.no";
-char path[] = "/api/v1/data-log-request";
-int port = 80;
-
-void initLed() {
-    pinMode(LED_BUILTIN, OUTPUT);
-}
-
-void blinkLed(int ms) {
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(ms);
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(ms);
-}
-
-void blinkLed(int count, int ms) {
-    for (int i = 0; i < count; i++) {
-        blinkLed(ms);
-    }
-}
+LedMgr statusLed(LED_BUILTIN);
+GsmHelper gsmHelper(&gsmAccess, &gprs, &statusLed, PINNUMBER, GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD);
+GsmHttpClient httpClient(&client, "hw1.kilsundvaeret.no", 80);
 
 void setup() {
-    //Serial.begin(9600);
-    //while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
-    //}
+    Serial.begin(9600);
+    while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
+    }
     dht.begin();
-    initLed();
-    blinkLed(1, 2000);
-
-    float t = dht.readTemperature();
-    Serial.print("Temp: ");
-    Serial.println(t);
-
-    gsmAccess.begin(PINNUMBER, true, false);
-    while (!gsmAccess.ready()) {
-        blinkLed(1, 100);
-    }
-
-    gprs.attachGPRS(GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD, false);
-    while (!gprs.ready()) {
-        blinkLed(1, 100);
-    }
-
-    blinkLed(1, 2000);
-
-    int connected = client.connect(server, port);
-    if (connected) {
-        char request[400];
-        char payload[400];
-        sprintf(payload, R"({"loggerId": "bua", "sensorName": "inne-temp", "value": %f })", t);
-
-        strcpy(request, "POST ");
-        strcat(request, path);
-        strcat(request, " HTTP/1.1\n");
-        strcat(request, "Host: ");
-        strcat(request, server);
-        strcat(request, "\n");
-        strcat(request, "Connection: close\n");
-        strcat(request, "Content-Type: application/json\n");
-        strcat(request, "Content-Length: ");
-        char contentLength[5];
-        itoa(strlen(payload),contentLength,10);
-        strcat(request, contentLength);
-        strcat(request, "\n\n");
-        strcat(request, payload);
-        strcat(request, "\n");
-
-        Serial.println(request);
-
-        blinkLed(1, 1000);
-        client.println(request);
-        blinkLed(1, 1000);
-
-        Serial.println("Data sent");
-    } else {
-        blinkLed(4, 250);
-        blinkLed(1, 3000);
-    }
+    statusLed.blink(1, 2000);
 }
 
+int iteration = 0;
+int errors = 0;
+
+void createSenorPayload(char *payload);
+void createLoggerPayload(char *payload, long timeSpent);
+
 void loop() {
-    // if there are incoming bytes available
-    // from the server, read them and print them:
-    if (client.available()) {
-        client.read();
+    iteration++;
+    Serial.print("Iteration ");
+    Serial.println(iteration);
+    statusLed.blink(3, 333);
+
+    Serial.println("Connecting...");
+    long timeSpent = gsmHelper.connect(60000);
+    if (timeSpent == -1) {
+        errors++;
+        Serial.println("Error while connecting. Taking a break...");
+        delay(60000);
+        Serial.println("Resetting modem");
+        gsmScanner.begin();
+        Serial.println("Modem reset");
+        return;
     }
 
-    // if the server's disconnected, stop the client:
-    if (!client.available() && !client.connected()) {
-        client.stop();
-        blinkLed(10, 100);
+    Serial.print("Connected in ");
+    Serial.print(timeSpent);
+    Serial.print(" millis");
+    Serial.println();
 
-        // do nothing forevermore:
-        while(true) {
-            delayMicroseconds(100);
-        }
+    char payload[400];
+    char response[400];
+    int success;
+
+    createSenorPayload(payload);
+    success = httpClient.post("/api/v1/data-log-request", payload, response);
+    if (success) {
+        Serial.println(response);
+    } else {
+        statusLed.blink(3, 1000);
     }
+
+    createLoggerPayload(payload, timeSpent);
+    success = httpClient.post("/api/v1/logger/bua/debug", payload, response);
+    if (success) {
+        Serial.println(response);
+    } else {
+        statusLed.blink(3, 1000);
+    }
+
+    gsmHelper.disconnect();
+
+    statusLed.blink(3, 333);
+
+    delay(10000);
+}
+
+
+void createSenorPayload(char *payload) {
+    unsigned long localTime = gsmAccess.getLocalTime();
+    float t = dht.readTemperature();
+    float h = dht.readHumidity();
+
+    sprintf(payload, R"({
+  "data": [
+    {
+      "loggerId": "bua",
+      "sensorName": "inne-temp",
+      "value": %f,
+      "localTime": %lu
+    },
+    {
+      "loggerId": "bua",
+      "sensorName": "inne-humidity",
+      "value": %f,
+      "localTime": %lu
+    }
+  ]
+})", t, localTime, h, localTime);
+}
+
+void createLoggerPayload(char *payload, long timeSpent) {
+    char signalStrength[3];
+    gsmScanner.getSignalStrength().toCharArray(signalStrength, 3);
+    sprintf(payload, R"({
+      "signalStrength": "%s",
+      "timeSpent": %ld,
+      "iteration": %d,
+      "errors": %d,
+      "millisSinceStart": %lu
+    })", signalStrength, timeSpent, iteration, errors, millis());
 }

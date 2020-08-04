@@ -122,9 +122,10 @@ void loop() {
 void readBatteryStatus(BatteryReading *reading) {
     reading->analogValue = analogRead(ADC_BATTERY);
     double batteryMaxVoltage = 4.2;
-    double batteryMinVoltage = 3.0;
-    reading->voltage = reading->analogValue / 1023.0 * batteryMaxVoltage;
-    reading->level = lround((reading->voltage - batteryMinVoltage) / (batteryMaxVoltage - batteryMinVoltage) * 100.0);
+    double analogMaxValue = 1009.0;
+    double analogMinValue = 810.0;
+    reading->voltage = reading->analogValue / analogMaxValue * batteryMaxVoltage;
+    reading->level = std::fmax(std::fmin(lround((reading->analogValue - analogMinValue) / (analogMaxValue - analogMinValue) * 100.0), 100.0), 0);
 }
 
 

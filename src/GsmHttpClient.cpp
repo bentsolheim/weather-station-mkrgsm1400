@@ -27,6 +27,9 @@ public:
             if (errorState != 0) {
                 return errorState;
             }
+            if (millis() - start > timeoutMillis) {
+                return -1;
+            }
         }
 
         gprs->setTimeout(timeoutMillis - (long)(millis() - start));
@@ -35,6 +38,9 @@ public:
             long errorState = checkConnectionStatus();
             if (errorState != 0) {
                 return errorState;
+            }
+            if (millis() - start > timeoutMillis) {
+                return -1;
             }
         }
         statusLed->off();
@@ -60,6 +66,32 @@ private:
     long checkConnectionStatus() const {
         statusLed->blink(1, 100);
         GSM3_NetworkStatus_t status = gsmAccess->status();
+        /*
+        switch (status) {
+
+            case ERROR:
+                Serial.println("ERROR");
+                break;
+            case IDLE:
+                Serial.println("IDLE");
+                break;
+            case CONNECTING:
+                Serial.println("CONNECTING");
+                break;
+            case GSM_READY:
+                Serial.println("GSM_READY");
+                break;
+            case GPRS_READY:
+                Serial.println("GPRS_READY");
+                break;
+            case TRANSPARENT_CONNECTED:
+                Serial.println("TRANSPARENT_CONNECTED");
+                break;
+            case GSM_OFF:
+                Serial.println("GSM_OFF");
+                break;
+        }
+         */
         if (status == ERROR) {
             return -1;
         }

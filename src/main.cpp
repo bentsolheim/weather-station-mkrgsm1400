@@ -12,15 +12,22 @@ const char GPRS_APN[] = SECRET_GPRS_APN;
 const char GPRS_LOGIN[] = SECRET_GPRS_LOGIN;
 const char GPRS_PASSWORD[] = SECRET_GPRS_PASSWORD;
 
-void createSenorPayload(char *payload);
+int createSenorPayload(char *payload);
 void createLoggerPayload(char *payload, long timeSpent);
+
+struct BatteryReading {
+    int analogValue;
+    double voltage;
+    int level;
+};
+void readBatteryStatus(BatteryReading *reading);
 
 GSMClient client;
 GPRS gprs;
 GSM gsmAccess(false);
 GSMScanner gsmScanner;
 
-DHT dht(1, DHT22);
+DHT dhtSensor(1, DHT22);
 
 LedMgr statusLed(LED_BUILTIN);
 LedMgr errorLed(7);
@@ -28,7 +35,8 @@ GsmHelper gsmHelper(&gsmAccess, &gprs, &statusLed, PINNUMBER, GPRS_APN, GPRS_LOG
 GsmHttpClient httpClient(&client, SECRET_HOSTNAME, SECRET_PORT);
 
 int iteration = 0;
-int errors = 0;
+int connectionErrors = 0;
+int sensorErrors = 0;
 
 void setup() {
     if (waitForDebug) {
@@ -36,7 +44,7 @@ void setup() {
         while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
         }
     }
-    dht.begin();
+    dhtSensor.begin();
     statusLed.on();
     errorLed.on();
     delay(1000);
@@ -51,11 +59,14 @@ void loop() {
     Serial.println(iteration);
     statusLed.blink(1, 100);
 
+    //delay(5*1000);
+    //return;
+
     Serial.println("Connecting...");
     long timeSpent = gsmHelper.connect(60000);
     if (timeSpent == -1) {
         errorLed.on();
-        errors++;
+        connectionErrors++;
         delay(60000);
         gsmScanner.begin();
         return;
@@ -71,14 +82,24 @@ void loop() {
     char payload[400];
     char response[400];
     int success;
+    int error;
 
     statusLed.on();
-    createSenorPayload(payload);
-    success = httpClient.post("/api/v1/logger/bua/readings", payload, response);
-    if (success) {
-        Serial.println(response);
-    } else {
-        errorLed.blink(2, 500);
+    for (int i=0; i<3; i++) {
+        error = createSenorPayload(payload);
+        if (!error) {
+            success = httpClient.post("/api/v1/logger/bua/readings", payload, response);
+            if (success) {
+                Serial.println(response);
+            } else {
+                errorLed.blink(2, 500);
+            }
+            break;
+        } else {
+            sensorErrors ++;
+            Serial.println("Got error while reading sensors. Retrying...");
+            delay(2000);
+        }
     }
 
     createLoggerPayload(payload, timeSpent);
@@ -97,11 +118,26 @@ void loop() {
     delay(5*60*1000);
 }
 
+void readBatteryStatus(BatteryReading *reading) {
+    reading->analogValue = analogRead(ADC_BATTERY);
+    double batteryMaxVoltage = 4.2;
+    double batteryMinVoltage = 3.0;
+    reading->voltage = reading->analogValue / 1023.0 * batteryMaxVoltage;
+    reading->level = lround((reading->voltage - batteryMinVoltage) / (batteryMaxVoltage - batteryMinVoltage) * 100.0);
+}
 
-void createSenorPayload(char *payload) {
+
+int createSenorPayload(char *payload) {
     unsigned long localTime = gsmAccess.getLocalTime();
-    float t = dht.readTemperature();
-    float h = dht.readHumidity();
+    float t = dhtSensor.readTemperature();
+    float h = dhtSensor.readHumidity();
+
+    if (t == NAN) {
+        return -1;
+    }
+    if (h == NAN) {
+        return -2;
+    }
 
     sprintf(payload, R"({
   "readings": [
@@ -117,16 +153,27 @@ void createSenorPayload(char *payload) {
     }
   ]
 })", t, localTime, h, localTime);
+    return 1;
 }
 
 void createLoggerPayload(char *payload, long timeSpent) {
+
+    BatteryReading battery{};
+    readBatteryStatus(&battery);
+
     char signalStrength[3];
     gsmScanner.getSignalStrength().toCharArray(signalStrength, 3);
     sprintf(payload, R"({
       "signalStrength": "%s",
       "timeSpent": %ld,
       "iteration": %d,
-      "errors": %d,
-      "millisSinceStart": %lu
-    })", signalStrength, timeSpent, iteration, errors, millis());
+      "connectionErrors": %d,
+      "sensorErrors": %d,
+      "millisSinceStart": %lu,
+      "battery": {
+        "analogReading": %d,
+        "voltage": %f,
+        "level": %d
+      }
+    })", signalStrength, timeSpent, iteration, connectionErrors, sensorErrors, millis(), battery.analogValue, battery.voltage, battery.level);
 }

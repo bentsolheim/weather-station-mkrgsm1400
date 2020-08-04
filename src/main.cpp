@@ -82,20 +82,21 @@ void loop() {
     char payload[400];
     char response[400];
     int success;
-    int error;
+    int statusCode;
 
     statusLed.on();
     for (int i=0; i<3; i++) {
-        error = createSenorPayload(payload);
-        if (!error) {
+        statusCode = createSenorPayload(payload);
+        if (statusCode == 1) {
             success = httpClient.post("/api/v1/logger/bua/readings", payload, response);
             if (success) {
                 Serial.println(response);
             } else {
-                errorLed.blink(2, 500);
+                errorLed.blink(3, 500);
             }
             break;
         } else {
+            errorLed.blink(1, 500);
             sensorErrors ++;
             Serial.println("Got error while reading sensors. Retrying...");
             delay(2000);

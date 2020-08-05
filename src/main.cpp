@@ -131,6 +131,7 @@ void readBatteryStatus(BatteryReading *reading) {
 
 int createSenorPayload(char *payload) {
     unsigned long localTime = gsmAccess.getLocalTime();
+    unsigned long unixTime = gsmAccess.getTime();
     float t = dhtSensor.readTemperature();
     float h = dhtSensor.readHumidity();
 
@@ -147,14 +148,16 @@ int createSenorPayload(char *payload) {
       "sensorName": "inne-temp",
       "value": %f,
       "localTime": %lu
+      "unixTime": %lu
     },
     {
       "sensorName": "inne-humidity",
       "value": %f,
       "localTime": %lu
+      "unixTime": %lu
     }
   ]
-})", t, localTime, h, localTime);
+})", t, localTime, unixTime, h, localTime, unixTime);
     return 1;
 }
 

@@ -147,13 +147,13 @@ int createSenorPayload(char *payload) {
     {
       "sensorName": "inne-temp",
       "value": %f,
-      "localTime": %lu
+      "localTime": %lu,
       "unixTime": %lu
     },
     {
       "sensorName": "inne-humidity",
       "value": %f,
-      "localTime": %lu
+      "localTime": %lu,
       "unixTime": %lu
     }
   ]

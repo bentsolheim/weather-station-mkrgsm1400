@@ -135,10 +135,10 @@ int createSenorPayload(char *payload) {
     float t = dhtSensor.readTemperature();
     float h = dhtSensor.readHumidity();
 
-    if (t == NAN) {
+    if (isnan(t)) {
         return -1;
     }
-    if (h == NAN) {
+    if (isnan(h)) {
         return -2;
     }
 

@@ -1,6 +1,8 @@
 #include <DHT.h>
 #include <MKRGSM.h>
 #include <Arduino.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include "secrets.h"
 #include "GsmHttpClient.cpp"
 #include "LedMgr.h"
@@ -13,6 +15,7 @@ const char GPRS_LOGIN[] = SECRET_GPRS_LOGIN;
 const char GPRS_PASSWORD[] = SECRET_GPRS_PASSWORD;
 
 int createSenorPayload(char *payload);
+
 void createLoggerPayload(char *payload, long timeSpent);
 
 struct BatteryReading {
@@ -20,6 +23,7 @@ struct BatteryReading {
     double voltage;
     int level;
 };
+
 void readBatteryStatus(BatteryReading *reading);
 
 GSMClient client;
@@ -28,6 +32,8 @@ GSM gsmAccess(false);
 GSMScanner gsmScanner;
 
 DHT dhtSensor(1, DHT22);
+OneWire oneWire(2);
+DallasTemperature sensors(&oneWire);
 
 LedMgr statusLed(LED_BUILTIN);
 LedMgr errorLed(7);
@@ -59,8 +65,8 @@ void loop() {
     Serial.println(iteration);
     statusLed.blink(1, 100);
 
-    //delay(5*1000);
-    //return;
+//    delay(5*1000);
+//    return;
 
     Serial.println("Connecting...");
     long timeSpent = gsmHelper.connect(60000);
@@ -85,22 +91,23 @@ void loop() {
     int statusCode;
 
     statusLed.on();
-    for (int i=0; i<3; i++) {
+    for (int i = 0; i < 3; i++) {
         statusCode = createSenorPayload(payload);
-        if (statusCode == 1) {
-            success = httpClient.post("/api/v1/logger/bua/readings", payload, response);
-            if (success) {
-                Serial.println(response);
-            } else {
-                errorLed.blink(3, 500);
-            }
-            break;
-        } else {
-            errorLed.blink(1, 500);
-            sensorErrors ++;
+        if (statusCode != 1) {
+            errorLed.blink(1, 1500);
+            errorLed.blink(abs(statusCode), 250);
+            sensorErrors++;
             Serial.println("Got error while reading sensors. Retrying...");
             delay(2000);
+            continue;
         }
+        success = httpClient.post("/api/v1/logger/bua/readings", payload, response);
+        if (success) {
+            Serial.println(response);
+        } else {
+            errorLed.blink(3, 500);
+        }
+        break;
     }
 
     createLoggerPayload(payload, timeSpent);
@@ -116,7 +123,7 @@ void loop() {
     statusLed.blink(2, 100);
     statusLed.off();
 
-    delay(5*60*1000);
+    delay(5 * 60 * 1000);
 }
 
 void readBatteryStatus(BatteryReading *reading) {
@@ -125,21 +132,29 @@ void readBatteryStatus(BatteryReading *reading) {
     double analogMaxValue = 1009.0;
     double analogMinValue = 810.0;
     reading->voltage = reading->analogValue / analogMaxValue * batteryMaxVoltage;
-    reading->level = std::fmax(std::fmin(lround((reading->analogValue - analogMinValue) / (analogMaxValue - analogMinValue) * 100.0), 100.0), 0);
+    reading->level = std::fmax(
+            std::fmin(lround((reading->analogValue - analogMinValue) / (analogMaxValue - analogMinValue) * 100.0),
+                      100.0), 0);
 }
 
 
 int createSenorPayload(char *payload) {
     unsigned long localTime = gsmAccess.getLocalTime();
     unsigned long unixTime = gsmAccess.getTime();
-    float t = dhtSensor.readTemperature();
-    float h = dhtSensor.readHumidity();
+    float temperatureInside = dhtSensor.readTemperature();
+    float temperatureOutside = dhtSensor.readHumidity();
 
-    if (isnan(t)) {
+    if (isnan(temperatureInside)) {
         return -1;
     }
-    if (isnan(h)) {
+    if (isnan(temperatureOutside)) {
         return -2;
+    }
+
+    sensors.requestTemperatures();
+    float waterTemp = sensors.getTempCByIndex(0);
+    if (waterTemp == DEVICE_DISCONNECTED_C) {
+        return -3;
     }
 
     sprintf(payload, R"({
@@ -155,9 +170,18 @@ int createSenorPayload(char *payload) {
       "value": %f,
       "localTime": %lu,
       "unixTime": %lu
+    },
+    {
+      "sensorName": "vann-temp",
+      "value": %f,
+      "localTime": %lu,
+      "unixTime": %lu
     }
   ]
-})", t, localTime, unixTime, h, localTime, unixTime);
+})",
+            temperatureInside, localTime, unixTime,
+            temperatureOutside, localTime, unixTime,
+            waterTemp, localTime, unixTime);
     return 1;
 }
 
@@ -180,5 +204,6 @@ void createLoggerPayload(char *payload, long timeSpent) {
         "voltage": %f,
         "level": %d
       }
-    })", signalStrength, timeSpent, iteration, connectionErrors, sensorErrors, millis(), battery.analogValue, battery.voltage, battery.level);
+    })", signalStrength, timeSpent, iteration, connectionErrors, sensorErrors, millis(), battery.analogValue,
+            battery.voltage, battery.level);
 }

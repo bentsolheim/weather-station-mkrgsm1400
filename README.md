@@ -1,7 +1,9 @@
 # weather-station-mkrgsm1400
 Code for the Arduino MKR GSM 1400 for reading water temperature and dispatching it to a server
 
-## Instructions
+## Setting up dev env
+
+After cloning repo, perform the following steps;
 
 Create file src/secrets.h with contents
 
@@ -13,7 +15,12 @@ Create file src/secrets.h with contents
     #define SECRET_HOSTNAME "datalogger.hostname.com"
     #define SECRET_PORT 80
     
-to build.
+Run 
+  
+    platformio -c clion init --ide clion 
+   
+Then, from within CLion, click "New Project" -> PlatformIO -> Arduino -> Arduino MKR GSM 1400. Make sure the location
+of the project is the same as the location where you cloned the repo to.
 
 ## Notes about the sensors
 

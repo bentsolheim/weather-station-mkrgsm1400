@@ -20,7 +20,8 @@ Run
     platformio -c clion init --ide clion 
    
 Then, from within CLion, click "New Project" -> PlatformIO -> Arduino -> Arduino MKR GSM 1400. Make sure the location
-of the project is the same as the location where you cloned the repo to.
+of the project is the same as the location where you cloned the repo to. Click no when asked to create from existing
+sources instead.
 
 ## Notes about the sensors
 

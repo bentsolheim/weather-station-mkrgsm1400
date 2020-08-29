@@ -146,7 +146,10 @@ void loop() {
 
     Watchdog.disable();
 
-    Watchdog.sleep(SLEEP_TIME_MILLIS);
+    int timeSlept = 0;
+    while (timeSlept < SLEEP_TIME_MILLIS) {
+        timeSlept += Watchdog.sleep(SLEEP_TIME_MILLIS);
+    }
 }
 
 void readBatteryStatus(BatteryReading *reading) {

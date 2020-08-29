@@ -9,6 +9,12 @@
 
 bool waitForDebug = false;
 
+int PIN_SENSOR_POWER_MOSFET = 0;
+int PIN_DHT_SENSOR = 1;
+int PIN_ONE_WIRE_SENSOR = 2;
+int PIN_STATUS_LED = LED_BUILTIN;
+int PIN_ERROR_LED = 7;
+
 const char PINNUMBER[] = SECRET_PINNUMBER;
 const char GPRS_APN[] = SECRET_GPRS_APN;
 const char GPRS_LOGIN[] = SECRET_GPRS_LOGIN;
@@ -31,12 +37,12 @@ GPRS gprs;
 GSM gsmAccess(false);
 GSMScanner gsmScanner;
 
-DHT dhtSensor(1, DHT22);
-OneWire oneWire(2);
+DHT dhtSensor(PIN_DHT_SENSOR, DHT22);
+OneWire oneWire(PIN_ONE_WIRE_SENSOR);
 DallasTemperature sensors(&oneWire);
 
-LedMgr statusLed(LED_BUILTIN);
-LedMgr errorLed(7);
+LedMgr statusLed(PIN_STATUS_LED);
+LedMgr errorLed(PIN_ERROR_LED);
 GsmHelper gsmHelper(&gsmAccess, &gprs, &statusLed, PINNUMBER, GPRS_APN, GPRS_LOGIN, GPRS_PASSWORD);
 GsmHttpClient httpClient(&client, SECRET_HOSTNAME, SECRET_PORT);
 
@@ -57,6 +63,8 @@ void setup() {
     statusLed.off();
     errorLed.off();
     delay(1000);
+
+    pinMode(0, OUTPUT);
 }
 
 void loop() {
@@ -65,8 +73,7 @@ void loop() {
     Serial.println(iteration);
     statusLed.blink(1, 100);
 
-//    delay(5*1000);
-//    return;
+    digitalWrite(PIN_SENSOR_POWER_MOSFET, HIGH);
 
     Serial.println("Connecting...");
     long timeSpent = gsmHelper.connect(60000);
@@ -122,6 +129,8 @@ void loop() {
 
     statusLed.blink(2, 100);
     statusLed.off();
+
+    digitalWrite(PIN_SENSOR_POWER_MOSFET, LOW);
 
     delay(5 * 60 * 1000);
 }

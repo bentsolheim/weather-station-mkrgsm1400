@@ -1,5 +1,6 @@
 #include "LedMgr.h"
 #include <MKRGSM.h>
+#include <Adafruit_SleepyDog.h>
 
 class GsmHelper {
 
@@ -30,6 +31,7 @@ public:
             if (millis() - start > timeoutMillis) {
                 return -1;
             }
+            Watchdog.reset();
         }
 
         gprs->setTimeout(timeoutMillis - (long)(millis() - start));
@@ -42,6 +44,7 @@ public:
             if (millis() - start > timeoutMillis) {
                 return -1;
             }
+            Watchdog.reset();
         }
         statusLed->off();
 

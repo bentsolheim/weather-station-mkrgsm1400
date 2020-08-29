@@ -3,17 +3,22 @@
 #include <Arduino.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <Adafruit_SleepyDog.h>
 #include "secrets.h"
 #include "GsmHttpClient.cpp"
 #include "LedMgr.h"
 
 bool waitForDebug = false;
 
-int PIN_SENSOR_POWER_MOSFET = 0;
-int PIN_DHT_SENSOR = 1;
-int PIN_ONE_WIRE_SENSOR = 2;
-int PIN_STATUS_LED = LED_BUILTIN;
-int PIN_ERROR_LED = 7;
+const int SLEEP_TIME_MILLIS = 5 * 60 * 1000;
+//const int SLEEP_TIME_MILLIS = 30 * 1000;
+const int WATCHDOG_TIMEOUT = 16000;
+
+const int PIN_SENSOR_POWER_MOSFET = 0;
+const int PIN_DHT_SENSOR = 1;
+const int PIN_ONE_WIRE_SENSOR = 2;
+const int PIN_STATUS_LED = LED_BUILTIN;
+const int PIN_ERROR_LED = 7;
 
 const char PINNUMBER[] = SECRET_PINNUMBER;
 const char GPRS_APN[] = SECRET_GPRS_APN;
@@ -56,6 +61,7 @@ void setup() {
         while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
         }
     }
+
     dhtSensor.begin();
     statusLed.on();
     errorLed.on();
@@ -68,12 +74,12 @@ void setup() {
 }
 
 void loop() {
+    Watchdog.enable(WATCHDOG_TIMEOUT);
+
     iteration++;
     Serial.print("Iteration ");
     Serial.println(iteration);
     statusLed.blink(1, 100);
-
-    digitalWrite(PIN_SENSOR_POWER_MOSFET, HIGH);
 
     Serial.println("Connecting...");
     long timeSpent = gsmHelper.connect(60000);
@@ -97,8 +103,12 @@ void loop() {
     int success;
     int statusCode;
 
+    digitalWrite(PIN_SENSOR_POWER_MOSFET, HIGH);
+    delay(2000);
+
     statusLed.on();
     for (int i = 0; i < 3; i++) {
+        Watchdog.reset();
         statusCode = createSenorPayload(payload);
         if (statusCode != 1) {
             errorLed.blink(1, 1500);
@@ -117,6 +127,7 @@ void loop() {
         break;
     }
 
+    Watchdog.reset();
     createLoggerPayload(payload, timeSpent);
     success = httpClient.post("/api/v1/logger/bua/debug", payload, response);
     if (success) {
@@ -125,6 +136,7 @@ void loop() {
         errorLed.blink(4, 250);
     }
 
+    Watchdog.reset();
     gsmHelper.disconnect();
 
     statusLed.blink(2, 100);
@@ -132,7 +144,9 @@ void loop() {
 
     digitalWrite(PIN_SENSOR_POWER_MOSFET, LOW);
 
-    delay(5 * 60 * 1000);
+    Watchdog.disable();
+
+    Watchdog.sleep(SLEEP_TIME_MILLIS);
 }
 
 void readBatteryStatus(BatteryReading *reading) {
